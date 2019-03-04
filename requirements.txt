@@ -1,2 +1,3 @@
+wrds_tools
 pandas
 wrds

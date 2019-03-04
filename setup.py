@@ -6,5 +6,5 @@ setup(name='wrds_tools',
       author='Julian Barg',
       author_email='barg.julian@gmail.com',
       packages=['wrds_tools'],
-      install_requires=['pandas']
+      install_requires=['pandas', 'wrds']
       )

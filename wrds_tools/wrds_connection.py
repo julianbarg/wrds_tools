@@ -21,8 +21,8 @@ class WrdsConnection:
     """
     A connection to the WRDS database. Saves username and password for you and builds connection.
 
-    :param wrds_username: Your wrds account username. Username must match with the username specified in the .pgpass \
-                          file on your computer. If no username is specified, will look up username from file \
+    :param wrds_username: Your wrds account username. Username must match with the username specified in the .pgpass
+                          file on your computer. If no username is specified, will look up username from file
                           specified in parameters.txt in the project directory.
     :param start_date: datetime.date instance with first day of observation period, or string in yyyy-mm-dd format.
     :param end_date: datetime.date instance with last day of observation period, or string in yyyy-mm-dd format.
@@ -56,8 +56,10 @@ class WrdsConnection:
 
     def build_sp500(self, company_info = True, return_dataframe = False):
         """
-        Download S&P constituents from wrds.
-        :param company_info: Should additional info on the companies be downloaded from the "names" table in WRDS's \
+        Download S&P constituents from wrds. Constituents are recorded in the "idxcst" table in wrds' "compa" library.
+        Online documentation of the library:
+        https://wrds-web.wharton.upenn.edu/wrds/tools/variable.cfm?library_id=129&file_id=65936
+        :param company_info: Should additional info on the companies be downloaded from the "names" table in WRDS's
         "compa" library?
         :param return_dataframe: Should the downloaded dataframe be returned, or only saved in the connection object?
         :return:
@@ -79,10 +81,13 @@ class WrdsConnection:
             after = sp_500['from'] >= self.end_date
             self.sp_sample = sp_500[~after]
 
-    def add_info
+    def add_names(self, rename = True):
+        pass
+
+    def add_info(self):
         company_info = _db.get_table(library='compa', table='names')
-        self.sp_sample = self.sp_sample.merge(company_info, on='gvkey', how='left')
+                                     self.sp_sample = self.sp_sample.merge(company_info, on='gvkey', how='left')
 
         # Some companies are dropped from the S&P 500 and later join again. This leads to duplicates in the data that
         # we filter out here. The last observation is retained (we expect observations to be equal).
-        self.sp_sample = self.sp_sample.drop_duplicates(subset='gvkey', keep='last')
+        # self.sp_sample = self.sp_sample.drop_duplicates(subset='gvkey', keep='last')

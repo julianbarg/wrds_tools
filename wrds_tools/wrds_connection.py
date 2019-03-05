@@ -1,6 +1,8 @@
 import wrds
 import parameters
+import pandas as pd
 
+from pandas import DataFrame
 from datetime import date
 
 
@@ -97,54 +99,61 @@ class WrdsConnection:
         elif rename_columns:
             self.dataset = self.dataset.rename(columns={'from': 'joined_sp500', 'thru': 'left_sp500'})
 
-    def add_name(self):
+    def add_name(self, dataframe: DataFrame = None):
         """
         Adds the company name from the "NAMES" table in compustat's "COMPA" library.
+        :param dataframe: Optional, a dataframe with a gvkey column for which to provide company names.
+        :return: When a dataframe is provided, a dataframe is returned. Otherwise, will save the amended dataset back
+        to the WrdsConnection object.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'conm']], on='gvkey', how='left')
-        self.dataset.rename(columns={'conm': 'name'})
+        self._download_names_table()
+        if dataframe is not None:
+            dataframe = dataframe.merge(self._names_table[['gvkey', 'conm']], on='gvkey', how='left')
+            return dataframe
+        else:
+            self.dataset = self.dataset.merge(self._names_table[['gvkey', 'conm']], on='gvkey', how='left')
+            self.dataset = self.dataset.rename(columns={'conm': 'name'})
 
     def add_ticker(self):
         """
         Adds the ticker number from the "NAMES" table in compustat's "COMPA" library.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'tic']], on='gvkey', how='left')
-        self.dataset.rename(columns={'tic': 'ticker'})
+        self._download_names_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'tic']], on='gvkey', how='left')
+        self.dataset = self.dataset.rename(columns={'tic': 'ticker'})
 
     def add_cusip(self):
         """
         Adds the cusip code from the "NAMES" table in compustat's "COMPA" library.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'cusip']], on='gvkey', how='left')
+        self._download_names_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'cusip']], on='gvkey', how='left')
 
     def add_CIK(self):
         """
         Adds the CIK code from the "NAMES" table in compustat's "COMPA" library.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'CIK']], on='gvkey', how='left')
+        self._download_names_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'CIK']], on='gvkey', how='left')
 
     def add_exit_year(self):
         """
         Adds the exit year from the "NAMES" table in compustat's "COMPA" library.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'year2']], on='gvkey', how='left')
+        self._download_names_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'year2']], on='gvkey', how='left')
         # The year2 column provides the last year for which accounting data is available, therefore, the exit year is
         # that year added 1.
         self.dataset['year2'] = self.dataset['year2'] + 1
-        self.dataset.rename(columns={'year2': 'exit_year'})
+        self.dataset = self.dataset.rename(columns={'year2': 'exit_year'})
 
     def add_ipo_date(self):
         """
         Adds the IPO year (or year of merger) from the "NAMES" table in compustat's "COMPA" library.
         """
-        yield self._download_names_table()
-        self.dataset.merge(self._names_table[['gvkey', 'ipodate']], on='gvkey', how='left')
-        self.dataset.rename(columns={'ipodate': 'ipo_date'})
+        self._download_names_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'ipodate']], on='gvkey', how='left')
+        self.dataset = self.dataset.rename(columns={'ipodate': 'ipo_date'})
 
     def add_industry_classifiers(self, get_GIC=False, get_s_and_p=False):
         """
@@ -156,18 +165,33 @@ class WrdsConnection:
         https://wrds-web.wharton.upenn.edu/wrds/query_forms/variable_documentation.cfm?vendorCode=COMP&libraryCode=COMPA&fileCode=COMPANY&id=ggroup
         https://us.spindices.com/governance/methodology-information/
         """
-        yield self._download_names_table()
+        self._download_names_table()
         if get_GIC or get_s_and_p:
-            yield self._download_company_table()
-        self.dataset.merge(self._names_table[['gvkey', 'SIC', 'NAICS']], on='gvkey', how='left')
+            self._download_company_table()
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'SIC', 'NAICS']], on='gvkey', how='left')
 
         if get_GIC:
-            self.dataset.merge(self._company_table[['gvkey', 'GGROUP', 'GIND', 'GSECTOR', 'GSUBIND']],
-                               on='gvkey', how='left')
+            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'GGROUP', 'GIND', 'GSECTOR', 'GSUBIND']],
+                                              on='gvkey', how='left')
 
         if get_s_and_p:
-            self.dataset.merge(self._company_table[['gvkey', 'SPCINDCD', 'SPCSECCD']],
-                               on='gvkey', how='left')
+            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'SPCINDCD', 'SPCSECCD']],
+                                              on='gvkey', how='left')
+
+    def add_address(self):
+        self._download_company_table()
+        address = pd.Series.str.cat(others=[self._company_table['add1'],
+                                    self._company_table['add2'],
+                                    self._company_table['add3'],
+                                    self._company_table['add4']],
+                                    sep='\n',
+                                    na_rep=True
+                                    )
+        company_address_pairs = self._company_table[['gvkey']].concat(address)
+        # self.dataset =
+
+
+
 
     def _download_names_table(self):
         """

@@ -30,7 +30,7 @@ class WrdsConnection:
                           specified in parameters.txt in the project directory.
     :param start_date: datetime.date instance with first day of observation period.
     :param end_date: datetime.date instance with last day of observation period.
-    :ivar _db: Saves your connection to the wrds database.
+    :ivar db: Saves your connection to the wrds database.
     :return: An object that holds the wrds connection object.
     """
     def __init__(self, wrds_username: str = None, start_date: date = None, end_date: date = None):
@@ -55,11 +55,13 @@ class WrdsConnection:
         # After creating the file, don't forget to run "chmod 0600 ~/.pgpass" in the console to limit access.
         # Access issue also described here:
         # https://www.postgresql.org/docs/9.5/libpq-pgpass.html.
-        self._db = wrds.Connection(wrds_username=self.wrds_username)
+        self.db = wrds.Connection(wrds_username=self.wrds_username)
 
     def set_observation_period(self, start_date: date = None, end_date: date = None):
         """
-
+        Explicitely set the observation period by passing in a datetime object. If no start date is provided, sample
+        will include all observations since beginning of recording. If no end date is provided, sample will include all
+        observations until the present.
         :param start_date: datetime.date instance with first day of observation period.
         :param end_date: datetime.date instance with last day of observation period.
         """
@@ -77,7 +79,7 @@ class WrdsConnection:
         column names?
         :param drop_uninformative: Should selected uninformative columns be dropped?
         """
-        constituents_all_indexes = self._db.get_table(library='compa', table='idxcst_his')
+        constituents_all_indexes = self.db.get_table(library='compa', table='idxcst_his')
 
         # "000003" is the Global Index Key of the S&P 500.
         dataset_raw = constituents_all_indexes[constituents_all_indexes.gvkeyx == '000003']
@@ -110,7 +112,7 @@ class WrdsConnection:
         elif rename_columns:
             self.dataset = self.dataset.rename(columns={'from': 'joined_sp500', 'thru': 'left_sp500'})
 
-    def add_name(self, dataframe: DataFrame = None):
+    def add_names(self, dataframe: DataFrame = None):
         """
         Adds the company name from the "NAMES" table in compustat's "COMPA" library.
         :param dataframe: Optional, a dataframe with a gvkey column for which to provide company names.
@@ -203,7 +205,6 @@ class WrdsConnection:
 
 
 
-
     def _download_names_table(self):
         """
         Pulls data from the "NAMES" table in compustat's "COMPA" library. The table matches gvkeys, which are used
@@ -212,7 +213,7 @@ class WrdsConnection:
         number (which is also used for identification purposes), and the SIC and NAICS industry identifiers.
         """
         if self._names_table is None:
-            self._names_table = self._db.get_table(library='compa', table='names')
+            self._names_table = self.db.get_table(library='compa', table='names')
 
     def _download_company_table(self):
         """
@@ -220,7 +221,7 @@ class WrdsConnection:
         as addresses, advanced industry classifiers, and the url of the corporate website.
         """
         if self._company_table is None:
-            self._company_table = self._db.get_table(library='compa', table='company')
+            self._company_table = self.db.get_table(library='compa', table='company')
 
     def return_dataframe(self):
         """

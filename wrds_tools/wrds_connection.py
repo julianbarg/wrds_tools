@@ -21,13 +21,15 @@ def setup_instructions():
 
 class WrdsConnection:
     """
-    A connection to the WRDS database. Saves username and password for you and builds connection.
+    A connection to the WRDS database. Saves username and password for you and builds connection. Observation period can
+    be set when initiating the connection object, or can explicitely be set later by using the set_observation_period
+    method.
 
     :param wrds_username: Your wrds account username. Username must match with the username specified in the .pgpass
                           file on your computer. If no username is specified, will look up username from file
                           specified in parameters.txt in the project directory.
-    :param start_date: datetime.date instance with first day of observation period, or string in yyyy-mm-dd format.
-    :param end_date: datetime.date instance with last day of observation period, or string in yyyy-mm-dd format.
+    :param start_date: datetime.date instance with first day of observation period.
+    :param end_date: datetime.date instance with last day of observation period.
     :ivar _db: Saves your connection to the wrds database.
     :return: An object that holds the wrds connection object.
     """
@@ -54,6 +56,15 @@ class WrdsConnection:
         # Access issue also described here:
         # https://www.postgresql.org/docs/9.5/libpq-pgpass.html.
         self._db = wrds.Connection(wrds_username=self.wrds_username)
+
+    def set_observation_period(self, start_date: date = None, end_date: date = None):
+        """
+
+        :param start_date: datetime.date instance with first day of observation period.
+        :param end_date: datetime.date instance with last day of observation period.
+        """
+        self.start_date = start_date
+        self.end_date = end_date
 
     def build_sp500(self, rename_columns=True, drop_uninformative=True):
         """

@@ -1,6 +1,6 @@
 # Wrds Tools
 
-Tools for Accessing Compustat Tables through WRDS by Name.
+Tools for accessing compustat variables through WRDS by name.
 
 ## Setup
 

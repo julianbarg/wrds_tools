@@ -6,7 +6,7 @@ from pandas import DataFrame
 from datetime import date
 
 
-def setup_instructions():
+def print_setup_instructions():
     """
     Prints the setup instructions for the .pgpass file required to access wrds via python.
     """

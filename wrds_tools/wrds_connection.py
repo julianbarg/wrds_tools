@@ -1,5 +1,4 @@
 import wrds
-import parameters
 import pandas as pd
 
 from pandas import DataFrame
@@ -33,14 +32,8 @@ class WrdsConnection:
     :ivar db: Saves your connection to the wrds database.
     :return: An object that holds the wrds connection object.
     """
-    def __init__(self, wrds_username: str = None, start_date: date = None, end_date: date = None):
-        if wrds_username:
-            self.username = wrds_username
-        # If wrds username is not provided, package will read the filename from text file specified in parameters.py.
-        # User
-        else:
-            with open(parameters.username_file, 'r') as file:
-                self.wrds_username = file.read()
+    def __init__(self, wrds_username: str, start_date: date = None, end_date: date = None):
+        self.username = wrds_username
 
         self.start_date = start_date
         self.end_date = end_date
@@ -55,7 +48,7 @@ class WrdsConnection:
         # After creating the file, don't forget to run "chmod 0600 ~/.pgpass" in the console to limit access.
         # Access issue also described here:
         # https://www.postgresql.org/docs/9.5/libpq-pgpass.html.
-        self.db = wrds.Connection(wrds_username=self.wrds_username)
+        self.db = wrds.Connection(wrds_username=self.username)
 
     def set_observation_period(self, start_date: date = None, end_date: date = None):
         """
@@ -105,8 +98,7 @@ class WrdsConnection:
         self.dataset = self.dataset.drop_duplicates(subset='gvkey', keep='last')
 
         if drop_uninformative:
-             # The only column that has value beyond the index are the index constituents, specified in the gvkey
-             # column.
+            # The only column that has value beyond the index are the index constituents, specified in the gvkey column.
             self.dataset = self.dataset[['gvkey']]
         # All columns with bad column names to be renamed here are also columns that would be dropped.
         elif rename_columns:
@@ -142,7 +134,7 @@ class WrdsConnection:
         self._download_names_table()
         self.dataset = self.dataset.merge(self._names_table[['gvkey', 'cusip']], on='gvkey', how='left')
 
-    def add_CIK(self):
+    def add_cik(self):
         """
         Adds the CIK code from the "NAMES" table in compustat's "COMPA" library.
         """
@@ -168,7 +160,7 @@ class WrdsConnection:
         self.dataset = self.dataset.merge(self._names_table[['gvkey', 'ipodate']], on='gvkey', how='left')
         self.dataset = self.dataset.rename(columns={'ipodate': 'ipo_date'})
 
-    def add_industry_classifiers(self, get_GIC=False, get_s_and_p=False):
+    def add_industry_classifiers(self, get_gic=False, get_s_and_p=False):
         """
         Adds two common industry classifiers, SIC and NAICS, from the "NAMES" table in compustat's "COMPA" library.
         Also contains options to pull industry classifiers from the Global Industry Classification Standard (GIC) and
@@ -179,11 +171,11 @@ class WrdsConnection:
         https://us.spindices.com/governance/methodology-information/
         """
         self._download_names_table()
-        if get_GIC or get_s_and_p:
+        if get_gic or get_s_and_p:
             self._download_company_table()
         self.dataset = self.dataset.merge(self._names_table[['gvkey', 'SIC', 'NAICS']], on='gvkey', how='left')
 
-        if get_GIC:
+        if get_gic:
             self.dataset = self.dataset.merge(self._company_table[['gvkey', 'GGROUP', 'GIND', 'GSECTOR', 'GSUBIND']],
                                               on='gvkey', how='left')
 
@@ -201,9 +193,8 @@ class WrdsConnection:
                                     na_rep=True
                                     )
         company_address_pairs = self._company_table[['gvkey']].concat(address)
+        # ToDo: Finish function to import address.
         # self.dataset =
-
-
 
     def _download_names_table(self):
         """

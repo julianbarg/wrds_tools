@@ -14,7 +14,7 @@ After creating the file, don't forget to run "chmod 0600 ~/.pgpass" in the conso
 Install import_from_github_com from your terminal to use this package directly from github.
 
 ```bash
-pip3 import_from_github_com
+pip3 install import_from_github_com
 ```
 Or use your package manager (e.g., Conda).
 

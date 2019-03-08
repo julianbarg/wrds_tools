@@ -1,1 +1,1 @@
-from wrds_tools.wrds_connection import Connection
+from wrds_tools.wrds_connection import WrdsConnection

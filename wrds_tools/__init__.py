@@ -1,1 +1,1 @@
-name = "wrds_tools"
+from wrds_tools.wrds_connection import Connection

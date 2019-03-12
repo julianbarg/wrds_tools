@@ -9,13 +9,19 @@ def print_setup_instructions():
     """
     Prints the setup instructions for the .pgpass file required to access wrds via python.
     """
-    print("""    To build a connection to the wrds server via python, a .pgpass file is required in the user's home 
-    directory, with access limited to the user.
-    To create this file, follow the instructions here:
-    https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/
-    After creating the file, don't forget to run "chmod 0600 ~/.pgpass" in the console to limit access. 
-    Access issue also described here:
-    https://www.postgresql.org/docs/9.5/libpq-pgpass.html""")
+    print("""To build a connection to the wrds server via python, a .pgpass file is required in the user's home 
+directory, with access limited to the user.
+To create this file, follow the instructions here:
+https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/
+After creating the file, don't forget to run "chmod 0600 ~/.pgpass" in the console to limit access. 
+Access issue also described here:
+https://www.postgresql.org/docs/9.5/libpq-pgpass.html""")
+
+
+class NoDatasetError(AttributeError):
+    """
+    Exception raised when user tries to use a function on the dataset, but has not downloaded a dataset yet.
+    """
 
 
 class WrdsConnection:
@@ -27,9 +33,10 @@ class WrdsConnection:
     :param wrds_username: Your wrds account username. Username must match with the username specified in the .pgpass
                           file on your computer. If no username is specified, will look up username from file
                           specified in parameters.txt in the project directory.
-    :param start_date: datetime.date instance with first day of observation period.
+    :param start_date: datetime.date instance with first day of observa`tion period.
     :param end_date: datetime.date instance with last day of observation period.
     :ivar db: Saves your connection to the wrds database.
+    :ivar dataset: Dataset of Panda DataFrame type that holds the data extracted from WRDS.
     :return: An object that holds the wrds connection object.
     """
     def __init__(self, wrds_username: str, start_date: date = None, end_date: date = None):
@@ -103,6 +110,15 @@ class WrdsConnection:
         # All columns with bad column names to be renamed here are also columns that would be dropped.
         elif rename_columns:
             self.dataset = self.dataset.rename(columns={'from': 'joined_sp500', 'thru': 'left_sp500'})
+
+    def head(self):
+        """
+        Applies the head method to the attached Pandas DataFrame.
+        :return: Prints the first five rows of the DataFrame.
+        """
+        if not self.dataset:
+            raise NoDatasetError('No dataset downloaded yet. Cannot display data head.')
+        return self.dataset.head()
 
     def add_names(self, dataframe: DataFrame = None):
         """
@@ -220,3 +236,27 @@ class WrdsConnection:
         :return: Pandas dataframe of the gathered dataset.
         """
         return self.dataset
+
+    def filter_by_industry(self, industry_code: str, classification_system: str = 'SIC'):
+        """
+        Only keep companies within certain industry (or industries).
+        :param industry_code: An industry code (string) or a list of industry codes that should be selected.
+        :param classification_system: The classification system that the industry code is in.
+        """
+        if not self.dataset:
+            raise NoDatasetError('No dataset downloaded yet. Cannot perform operation on dataset.')
+
+        # First, we make sure that the industry classification system we want to filter by is already in the dataset.
+        if classification_system in 'SIC' and 'SIC' not in list(self.dataset):
+            self.add_industry_classifiers()
+        if classification_system == 'NAICS' and 'NAICS' not in list(self.dataset):
+            self.add_industry_classifiers()
+        if classification_system in ['GGROUP', 'GIND', 'GSECTOR', 'GSUBIND'] and 'GGROUP' not in list(self.dataset):
+            self.add_industry_classifiers(get_gic=True)
+        if classification_system in ['SPCINDCD', 'SPCSECCD'] and 'SPCINDCD' not in list(self.dataset):
+            self.add_industry_classifiers(get_s_and_p=True)
+
+        if type(industry_code) == list:
+            self.dataset = self.dataset[self.dataset[classification_system].isin(industry_code)]
+        if type(industry_code) == str:
+            self.dataset = self.dataset[self.dataset[classification_system] == industry_code]

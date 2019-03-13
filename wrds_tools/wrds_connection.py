@@ -47,6 +47,7 @@ class WrdsConnection:
 
         self.dataset = None
         self._names_table = None
+        self._company_table = None
 
         # To build a connection to the wrds server via python, a .pgpass file is required in the user's home
         # directory, with access limited to the user.
@@ -176,7 +177,7 @@ class WrdsConnection:
         self.dataset = self.dataset.merge(self._names_table[['gvkey', 'ipodate']], on='gvkey', how='left')
         self.dataset = self.dataset.rename(columns={'ipodate': 'ipo_date'})
 
-    def add_industry_classifiers(self, get_gic=False, get_s_and_p=False):
+    def add_industry_classifiers(self, get_GICS=False, get_SP=False):
         """
         Adds two common industry classifiers, SIC and NAICS, from the "NAMES" table in compustat's "COMPA" library.
         Also contains options to pull industry classifiers from the Global Industry Classification Standard (GIC) and
@@ -187,17 +188,26 @@ class WrdsConnection:
         https://us.spindices.com/governance/methodology-information/
         """
         self._download_names_table()
-        if get_gic or get_s_and_p:
+        if get_GICS or get_SP:
             self._download_company_table()
-        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'SIC', 'NAICS']], on='gvkey', how='left')
+        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'sic', 'naics']], on='gvkey', how='left')
+        self.dataset.rename(columns={'sic': 'SIC', 'naics': 'NAICS'}, inplace=True)
 
-        if get_gic:
-            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'GGROUP', 'GIND', 'GSECTOR', 'GSUBIND']],
+        if get_GICS:
+            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'ggroup', 'gind', 'gsector', 'gsubind']],
                                               on='gvkey', how='left')
+            self.dataset.rename(columns={'ggroup': 'GICS_group',
+                                         'gind': 'GICS_industry',
+                                         'gsector': 'GICS_sector',
+                                         'gsubind': 'GICS_subindustry'}, inplace=True)
+            # We want the columns to have int format, for easier filtering operations.
+            GICS_columns = ['GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry']
+            self.dataset[GICS_columns] = self.dataset[GICS_columns](dtype=int)
 
-        if get_s_and_p:
-            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'SPCINDCD', 'SPCSECCD']],
+        if get_SP:
+            self.dataset = self.dataset.merge(self._company_table[['gvkey', 'spcindcd', 'spcseccd']],
                                               on='gvkey', how='left')
+            self.dataset.rename(columns={'spcindcd': 'SP_industry', 'spcseccd': 'SP_sector'}, inplace=True)
 
     def add_address(self):
         self._download_company_table()
@@ -237,26 +247,37 @@ class WrdsConnection:
         """
         return self.dataset
 
-    def filter_by_industry(self, industry_code: str, classification_system: str = 'SIC'):
+    def filter_by_industry(self, industry_code: int, classification_system: str = 'SIC'):
         """
         Only keep companies within certain industry (or industries).
-        :param industry_code: An industry code (string) or a list of industry codes that should be selected.
+        :param industry_code: An industry code (int or string) or a list of industry codes that should be selected.
         :param classification_system: The classification system that the industry code is in.
         """
-        if not self.dataset:
+        if type(industry_code) in [int, str]:
+            industry_code = float(industry_code)
+        assert type(industry_code) in [float, list]
+
+        if not isinstance(self.dataset, DataFrame):
             raise NoDatasetError('No dataset downloaded yet. Cannot perform operation on dataset.')
 
         # First, we make sure that the industry classification system we want to filter by is already in the dataset.
         if classification_system in 'SIC' and 'SIC' not in list(self.dataset):
+            print('Downloading SIC and NAICS industry classifiers.')
             self.add_industry_classifiers()
+        # Listed separately in case I want to differentiate between SIC and NAICS in the future.
         if classification_system == 'NAICS' and 'NAICS' not in list(self.dataset):
+            print('Downloading SIC and NAICS industry classifiers.')
             self.add_industry_classifiers()
-        if classification_system in ['GGROUP', 'GIND', 'GSECTOR', 'GSUBIND'] and 'GGROUP' not in list(self.dataset):
-            self.add_industry_classifiers(get_gic=True)
-        if classification_system in ['SPCINDCD', 'SPCSECCD'] and 'SPCINDCD' not in list(self.dataset):
-            self.add_industry_classifiers(get_s_and_p=True)
+        if classification_system in ['GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry'] \
+                and 'GICS_group' not in list(self.dataset):
+            print('Downloading GICS Industry classifiers.')
+            self.add_industry_classifiers(get_GICS=True)
+        if classification_system in ['SP_industry', 'SP_sector'] and 'SP_industry' not in list(self.dataset):
+            print('Downloading S&P Industry classifiers.')
+            self.add_industry_classifiers(get_SP=True)
 
         if type(industry_code) == list:
             self.dataset = self.dataset[self.dataset[classification_system].isin(industry_code)]
         if type(industry_code) == str:
             self.dataset = self.dataset[self.dataset[classification_system] == industry_code]
+        self.dataset.reset_index(inplace=True)

@@ -218,7 +218,7 @@ class WrdsConnection:
         # A bit of collective cleanup.
         classification_systems = ['SIC', 'NAICS', 'GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry',
                                   'SP_industry', 'SP_sector']
-        new_columns = [column for column in list(wrds.dataset) if column in classification_systems]
+        new_columns = [column for column in list(self.dataset) if column in classification_systems]
         # There are None values and np.nans in the dataset. One could look up whether those are different things in
         # the original SAS database, but for now we will just assume they are all missing values.
         self.dataset[new_columns] = self.dataset[new_columns].replace([np.nan], [None])

@@ -3,6 +3,7 @@ import pandas as pd
 
 from pandas import DataFrame
 from datetime import date
+import numpy as np
 
 
 def print_setup_instructions():
@@ -187,27 +188,42 @@ class WrdsConnection:
         https://wrds-web.wharton.upenn.edu/wrds/query_forms/variable_documentation.cfm?vendorCode=COMP&libraryCode=COMPA&fileCode=COMPANY&id=ggroup
         https://us.spindices.com/governance/methodology-information/
         """
+        if not isinstance(self.dataset, DataFrame):
+            raise NoDatasetError('No dataset downloaded yet. Cannot perform operation on dataset.')
+
         self._download_names_table()
         if get_GICS or get_SP:
             self._download_company_table()
-        self.dataset = self.dataset.merge(self._names_table[['gvkey', 'sic', 'naics']], on='gvkey', how='left')
-        self.dataset.rename(columns={'sic': 'SIC', 'naics': 'NAICS'}, inplace=True)
 
-        if get_GICS:
+        # We split the operation into three parts (SIC/NAICS, GICS and S&P classification system) to leave the original
+        # data untouched and only change the data in our custom dataset.
+
+        if 'SIC' not in list(self.dataset):
+            self.dataset = self.dataset.merge(self._names_table[['gvkey', 'sic', 'naics']], on='gvkey', how='left')
+            self.dataset.rename(columns={'sic': 'SIC', 'naics': 'NAICS'}, inplace=True)
+
+        if get_GICS and 'GICS_group' not in list(self.dataset):
             self.dataset = self.dataset.merge(self._company_table[['gvkey', 'ggroup', 'gind', 'gsector', 'gsubind']],
                                               on='gvkey', how='left')
             self.dataset.rename(columns={'ggroup': 'GICS_group',
                                          'gind': 'GICS_industry',
                                          'gsector': 'GICS_sector',
                                          'gsubind': 'GICS_subindustry'}, inplace=True)
-            # We want the columns to have int format, for easier filtering operations.
-            GICS_columns = ['GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry']
-            self.dataset[GICS_columns] = self.dataset[GICS_columns](dtype=int)
 
-        if get_SP:
+        if get_SP and 'SP_industry' not in list(self.dataset):
             self.dataset = self.dataset.merge(self._company_table[['gvkey', 'spcindcd', 'spcseccd']],
                                               on='gvkey', how='left')
             self.dataset.rename(columns={'spcindcd': 'SP_industry', 'spcseccd': 'SP_sector'}, inplace=True)
+
+        # A bit of collective cleanup.
+        classification_systems = ['SIC', 'NAICS', 'GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry',
+                                  'SP_industry', 'SP_sector']
+        new_columns = [column for column in list(wrds.dataset) if column in classification_systems]
+        # There are None values and np.nans in the dataset. One could look up whether those are different things in
+        # the original SAS database, but for now we will just assume they are all missing values.
+        self.dataset[new_columns] = self.dataset[new_columns].replace([np.nan], [None])
+        # Note: changing type to category sets all None values to nan again.
+        self.dataset[new_columns] = self.dataset[new_columns].astype('category')
 
     def add_address(self):
         self._download_company_table()
@@ -247,25 +263,17 @@ class WrdsConnection:
         """
         return self.dataset
 
-    def filter_by_industry(self, industry_code: int, classification_system: str = 'SIC'):
+    def filter_by_industry(self, industry_code: str, classification_system: str):
         """
         Only keep companies within certain industry (or industries).
-        :param industry_code: An industry code (int or string) or a list of industry codes that should be selected.
+        :param industry_code: An industry code (string) or a list of industry codes (strings) that should be selected.
         :param classification_system: The classification system that the industry code is in.
         """
-        if type(industry_code) in [int, str]:
-            industry_code = float(industry_code)
-        assert type(industry_code) in [float, list]
-
         if not isinstance(self.dataset, DataFrame):
             raise NoDatasetError('No dataset downloaded yet. Cannot perform operation on dataset.')
 
         # First, we make sure that the industry classification system we want to filter by is already in the dataset.
-        if classification_system in 'SIC' and 'SIC' not in list(self.dataset):
-            print('Downloading SIC and NAICS industry classifiers.')
-            self.add_industry_classifiers()
-        # Listed separately in case I want to differentiate between SIC and NAICS in the future.
-        if classification_system == 'NAICS' and 'NAICS' not in list(self.dataset):
+        if classification_system in ['SIC', 'NAICS'] and 'SIC' not in list(self.dataset):
             print('Downloading SIC and NAICS industry classifiers.')
             self.add_industry_classifiers()
         if classification_system in ['GICS_group', 'GICS_industry', 'GICS_sector', 'GICS_subindustry'] \

@@ -118,8 +118,9 @@ class WrdsConnection:
         Applies the head method to the attached Pandas DataFrame.
         :return: Prints the first five rows of the DataFrame.
         """
-        if not self.dataset:
+        if not isinstance(self.dataset, DataFrame):
             raise NoDatasetError('No dataset downloaded yet. Cannot display data head.')
+        # Todo: pass through arguments.
         return self.dataset.head()
 
     def add_names(self, dataframe: DataFrame = None):
@@ -288,4 +289,4 @@ class WrdsConnection:
             self.dataset = self.dataset[self.dataset[classification_system].isin(industry_code)]
         if type(industry_code) == str:
             self.dataset = self.dataset[self.dataset[classification_system] == industry_code]
-        self.dataset.reset_index(inplace=True)
+        self.dataset.reset_index(drop=True, inplace=True)

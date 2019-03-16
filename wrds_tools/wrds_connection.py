@@ -4,7 +4,7 @@ import warnings
 
 from itertools import compress
 from pandas import DataFrame
-from datetime import date
+from datetime import date, datetime
 import numpy as np
 
 
@@ -277,6 +277,7 @@ class WrdsConnection:
         join_data = self._executive_table[['execid', 'year', 'gvkey']].copy()
         if ceo_only:
             join_data = join_data[join_data['ceoann'] == 'CEO']
+        join_data = self._filter_observation_period(join_data, pd.to_datetime(join_data[['year']], format='%Y'))
 
         if 'year' not in list(self.dataset):
             self.dataset = pd.merge(self.dataset, join_data, how='left', on='gvkey')
@@ -383,3 +384,22 @@ class WrdsConnection:
         if type(industry_code) == str:
             self.dataset = self.dataset[self.dataset[classification_system] == industry_code]
         self.dataset.reset_index(drop=True, inplace=True)
+
+    def _filter_observation_period(self, df: DataFrame, date_column: pd.Series):
+        """
+        Helper function to filter for observations that are within the observation period (specified via the
+        set_observation_period method).
+        :param df: Dateframe on which to apply the filter.
+        :param date_column: A pandas datetime series.
+        :return: Dataframe, filtered for the observations that fall within the observation period.
+        """
+        if (self.observation_start_date is None) and (self.observation_end_date is None):
+            print('No observation period specified. Will return all available observations.')
+            return df
+
+        # We concert the start date to the datetime format, as this is required to compare the date to a pd.Series.
+        start = datetime.combine(self.observation_start_date, datetime.min.time())
+        end = datetime.combine(self.observation_end_date, datetime.min.time())
+        within_period = (date_column >= start) & (date_column <= end)
+
+        return df[within_period]

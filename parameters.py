@@ -1,1 +1,1 @@
-username_file = 'wrds_username.txt'
+wrds_username = open(r"wrds_username.txt", "r").read()

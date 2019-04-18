@@ -46,8 +46,9 @@ class WrdsConnection:
     :ivar dataset: Dataset of Panda DataFrame type that holds the data extracted from WRDS.
     :return: An object that holds the wrds connection object.
     """
-    def __init__(self, wrds_username: str, selection_start_date: date = None, selection_end_date: date = None,
-                 observation_start_date: date = None, observation_end_date: date = None):
+    def __init__(self, wrds_username: str = parameters.wrds_username, selection_start_date: date = None,
+                 selection_end_date: date = None, observation_start_date: date = None,
+                 observation_end_date: date = None):
         self.username = wrds_username
 
         self.selection_start_date = selection_start_date

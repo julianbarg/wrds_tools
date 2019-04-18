@@ -46,7 +46,7 @@ class WrdsConnection:
     :ivar dataset: Dataset of Panda DataFrame type that holds the data extracted from WRDS.
     :return: An object that holds the wrds connection object.
     """
-    def __init__(self, wrds_username: str = parameters.wrds_username, selection_start_date: date = None,
+    def __init__(self, wrds_username: str, selection_start_date: date = None,
                  selection_end_date: date = None, observation_start_date: date = None,
                  observation_end_date: date = None):
         self.username = wrds_username
@@ -281,9 +281,11 @@ class WrdsConnection:
         executive_year_columns = pd.to_datetime(join_data['year'], format='%Y')
         join_data = self._filter_observation_period(join_data, executive_year_columns)
 
+        # ToDo: Merge takes the first matching entry. Consider taking the last one (mostly year end).
         if 'year' not in list(self.dataset):
             self.dataset = pd.merge(self.dataset, join_data, how='left', on='gvkey')
 
+        # ToDo: Merge takes the first matching entry. Consider taking the last one (mostly year end).
         else:
             self.dataset = pd.merge(self.dataset, join_data, how='left', on=['gvkey', 'year'])
 
@@ -312,6 +314,7 @@ class WrdsConnection:
         all_info_columns = ['titleann', 'exec_fullname', 'salary', 'bonus', 'ceoann']
         selected_info_columns = list(compress(all_info_columns, selections))
 
+        # ToDo: Merge takes the first matching entry. Consider taking the last one (mostly year end).
         # Add the columns we are merging on.
         merge_columns = selected_info_columns + ['execid', 'year', 'gvkey']
 

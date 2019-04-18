@@ -320,7 +320,11 @@ class WrdsConnection:
 
         self.dataset = self.dataset.merge(self._executive_table[merge_columns], how='left',
                                           on=['execid', 'year', 'gvkey'])
-        print('Added the following info on executives: {0}'.format(selected_info_columns))
+
+        info_columns_rename = ['personnel_title', 'personnel_full_name', 'personnel_salary', 'personnel_bonus',
+                               'personnel_is_ceo']
+        selected_columns_rename = list(compress(info_columns_rename, selections))
+        print('Added the following info on executives: {0}'.format(selected_columns_rename))
 
         # ToDo make mapping dictionary an attribute of the WrdsConnection object. Then, use self.attribute_name below.
         self.dataset.rename({'title_ann': 'personnel_title', 'exec_fullname': 'personnel_full_name',

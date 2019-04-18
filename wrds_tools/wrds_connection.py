@@ -327,13 +327,13 @@ class WrdsConnection:
         print('Added the following info on executives: {0}'.format(selected_columns_rename))
 
         # ToDo make mapping dictionary an attribute of the WrdsConnection object. Then, use self.attribute_name below.
-        self.dataset.rename({'title_ann': 'personnel_title', 'exec_fullname': 'personnel_full_name',
-                             'salary': 'personnel_salary', 'bonus': 'personnel_bonus',
-                             'ceoann': 'personnel_is_ceo'},
-                            axis='columns')
+        self.dataset = self.dataset.rename({'title_ann': 'personnel_title', 'exec_fullname': 'personnel_full_name',
+                                            'salary': 'personnel_salary', 'bonus': 'personnel_bonus',
+                                            'ceoann': 'personnel_is_ceo'},
+                                           axis='columns')
 
         # Transform CEO flag into boolean.
-        self.dataset['personnel_is_ceo'] = self.dataset['ceoann'] == 'CEO'
+        self.dataset['personnel_is_ceo'] = self.dataset['personnel_is_ceo'] == 'CEO'
 
     def add_address(self):
         """

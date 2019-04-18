@@ -34,8 +34,8 @@ class WrdsConnection:
     method.
 
     :param wrds_username: Your wrds account username. Username must match with the username specified in the .pgpass
-    file on your computer. If no username is specified, will look up username from file specified in parameters.txt in
-    the project directory.
+    file on your computer. If no username is specified, will look up username from parameters.txt in the project
+    directory.
     :param selection_start_date: datetime.date, start of time period within which companies will be selected into the
     sample.
     :param selection_end_date: datetime.date, end of time period within which companies will be selected into the
@@ -270,14 +270,15 @@ class WrdsConnection:
         :param ceo_only: Only info on CEOs is added to the dataset.
         """
         if 'execid' in list(self.dataset):
-            print('Executives already added to the dataset. No information will be added.')
-            pass
+            print('Executives already added to the dataset. Executives will not be merged in again.')
+            return
 
         self._download_executive_table()
         join_data = self._executive_table[['execid', 'year', 'gvkey']].copy()
         if ceo_only:
             join_data = join_data[join_data['ceoann'] == 'CEO']
-        join_data = self._filter_observation_period(join_data, pd.to_datetime(join_data[['year']], format='%Y'))
+        executive_year_columns = pd.to_datetime(join_data['year'], format='%Y')
+        join_data = self._filter_observation_period(join_data, executive_year_columns)
 
         if 'year' not in list(self.dataset):
             self.dataset = pd.merge(self.dataset, join_data, how='left', on='gvkey')
@@ -285,7 +286,6 @@ class WrdsConnection:
         else:
             self.dataset = pd.merge(self.dataset, join_data, how='left', on=['gvkey', 'year'])
 
-        self.dataset['year'] = self.dataset['year'].astype('Int64')
         self.dataset.reset_index(drop=True, inplace=True)
 
     def add_executive_info(self, add_title: bool = False, add_full_name: bool = False, add_salary: bool = False,
@@ -304,14 +304,28 @@ class WrdsConnection:
         else:
             self.add_executives()
 
+        # ToDo: Control for columns already in the dataset.
+
+        # A quick and elegant way to get a list of the column names we want to include.
         selections = [add_title, add_full_name, add_salary, add_bonus, add_ceo_flag]
         all_info_columns = ['titleann', 'exec_fullname', 'salary', 'bonus', 'ceoann']
-        # A quick and elegant way to get a list of the column names we want to include.
-        selected_info_columns = list(compress(all_info_columns, selections)).extend(['execid', 'year'])
+        selected_info_columns = list(compress(all_info_columns, selections))
 
-        self.dataset = self.dataset.join(self._executive_table[selected_info_columns], how='inner',
-                                         on=['execid', 'year'])
-        # Todo: Change CEO column to boolean.
+        # Add the columns we are merging on.
+        merge_columns = selected_info_columns + ['execid', 'year', 'gvkey']
+
+        self.dataset = self.dataset.merge(self._executive_table[merge_columns], how='left',
+                                          on=['execid', 'year', 'gvkey'])
+        print('Added the following info on executives: {0}'.format(selected_info_columns))
+
+        # ToDo make mapping dictionary an attribute of the WrdsConnection object. Then, use self.attribute_name below.
+        self.dataset.rename({'title_ann': 'personnel_title', 'exec_fullname': 'personnel_full_name',
+                             'salary': 'personnel_salary', 'bonus': 'personnel_bonus',
+                             'ceoann': 'personnel_is_ceo'},
+                            axis='columns')
+
+        # Transform CEO flag into boolean.
+        self.dataset['personnel_is_ceo'] = self.dataset['ceoann'] == 'CEO'
 
     def add_address(self):
         """
@@ -350,6 +364,7 @@ class WrdsConnection:
         """
         if self._executive_table is None:
             self._executive_table = self.db.get_table(library='execcomp', table='anncomp')
+            self._executive_table['year'] = self._executive_table['year'].astype('Int64')
 
     def return_dataframe(self):
         """

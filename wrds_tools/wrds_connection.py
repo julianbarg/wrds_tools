@@ -360,7 +360,7 @@ class WrdsConnection:
             raise NoDatasetError('Must first build a dataset.')
 
         selections = [revenue, r_n_d, wages_and_salaries, total_assets, fiscal_year_end, COGS, EBIT, EBITDA, TIC]
-        all_info_columns = ['revt', 'xdr', 'xstfws', 'ct', 'fyrc', 'cogs', 'ebit', 'ebitda', 'tic']
+        all_info_columns = ['revt', 'xrd', 'xstfws', 'ct', 'fyrc', 'cogs', 'ebit', 'ebitda', 'tic']
         selected_columns = list(compress(all_info_columns, selections))
 
         # Add the columns we are merging on

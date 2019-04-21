@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(name='wrds_tools',
-                 version='0.0.10',
+                 version='0.0.11',
                  description='Various tools to create a connection to the WRDS service and download commonly used ' +
                              'data.',
                  long_description=long_description,

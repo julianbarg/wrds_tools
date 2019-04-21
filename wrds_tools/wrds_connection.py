@@ -60,6 +60,7 @@ class WrdsConnection:
         self._names_table = None
         self._company_table = None
         self._executive_table = None
+        self._annuals_table = None
 
         # To build a connection to the wrds server via python, a .pgpass file is required in the user's home
         # directory, with access limited to the user.
@@ -291,8 +292,8 @@ class WrdsConnection:
 
         self.dataset.reset_index(drop=True, inplace=True)
 
-    def add_executive_info(self, add_title: bool = False, add_full_name: bool = False, add_salary: bool = False,
-                           add_bonus: bool = False, add_ceo_flag: bool = False):
+    def add_executive_info(self, add_title = False, add_full_name = False, add_salary = False,
+                           add_bonus = False, add_ceo_flag = False):
         """
         Add various information about executives.
         :param add_title: Full title of the position.
@@ -312,11 +313,11 @@ class WrdsConnection:
         # A quick and elegant way to get a list of the column names we want to include.
         selections = [add_title, add_full_name, add_salary, add_bonus, add_ceo_flag]
         all_info_columns = ['titleann', 'exec_fullname', 'salary', 'bonus', 'ceoann']
-        selected_info_columns = list(compress(all_info_columns, selections))
+        selected_columns = list(compress(all_info_columns, selections))
 
         # ToDo: Merge takes the first matching entry. Consider taking the last one (mostly year end).
         # Add the columns we are merging on.
-        merge_columns = selected_info_columns + ['execid', 'year', 'gvkey']
+        merge_columns = selected_columns + ['execid', 'year', 'gvkey']
 
         self.dataset = self.dataset.merge(self._executive_table[merge_columns], how='left',
                                           on=['execid', 'year', 'gvkey'])
@@ -335,6 +336,64 @@ class WrdsConnection:
         # Transform CEO flag into boolean.
         self.dataset['personnel_is_ceo'] = self.dataset['personnel_is_ceo'] == 'CEO'
 
+    def add_company_info(self, revenue=True, r_n_d=False, wages_and_salaries=False, total_assets=False,
+                         fiscal_year_end=False, COGS=False, EBIT=False, EBITDA=False, TIC=False):
+        """
+        Add company information (by year) from the "FUNDA" (fundamentals annual) table in the "COMPA" (company annual)
+        library.
+        :param revenue: Adding total revenue (REVT).
+        :param r_n_d: Add R&D expense(XDR).
+        :param wages_and_salaries: Add wages and salaries (XSTFWS).
+        :param total_assets: Add total assets (ACT).
+        :param fiscal_year_end: Add month of year end (FYRC). If year end after 15th, states coming month.
+        :param COGS: Add cost of goods sold (COGS).
+        :param EBIT: Add earnings before interest and taxes (EBIT).
+        :param EBITDA: Add earnings before interest (EBITDA).
+        :param ticker: Add ticker symbol (TIC).
+        """
+        # ToDo: Eventually, could implement a more robust handling of fiscal year data, that retains information on year
+        #  end month and fiscal year in the final dataset.
+        if not self._download_annuals():
+            raise NoDatasetError('Downloading company information (annual) failed. Information could not be merged '
+                                 + 'into your dataset.')
+        if self.dataset is None:
+            raise NoDatasetError('Must first build a dataset.')
+
+        selections = [revenue, r_n_d, wages_and_salaries, total_assets, fiscal_year_end, COGS, EBIT, EBITDA, TIC]
+        all_info_columns = ['revt', 'xdr', 'xstfws', 'ct', 'fyrc', 'cogs', 'ebit', 'ebitda', 'tic']
+        selected_columns = list(compress(all_info_columns, selections))
+
+        # Add the columns we are merging on
+        selected_columns = selected_columns + ['gvkey', 'fyear']
+
+        if 'year' in list(self.dataset):
+            self.dataset = self.dataset.merge(
+                # For some reason, the FUNDA table has some duplicate rows with mostly nan values. For efficient memory
+                # use, we perform a lot of steps at once.
+                # ToDo: Benchmark efficiency of this approach vs more readable approach.
+                self._annuals_table[selected_columns].rename({'fyear': 'year'}, axis='columns')
+                    .drop_duplicates(subset=['year', 'gvkey']),
+                how='left', on=['gvkey', 'year'])
+
+        else:
+            join_data = self._annuals_table[selected_columns].copy()
+            annuals_year_column = pd.to_datetime(join_data['fyear'], format='%Y')
+            merge_columns = self._filter_observation_period(join_data, annuals_year_column)
+
+            # For some reason, the FUNDA table has some duplicate rows with mostly nan values. For efficient memory
+            # use, we perform a lot of steps at once.
+            # ToDo: Benchmark efficiency of this approach vs more readable approach.
+            self.dataset = pd.merge(self.dataset, merge_columns.rename({'fyear': 'year'}, axis='columns')
+                                    .drop_duplicates(subset=['year', 'gvkey']),
+                         how='left', on=['gvkey'])
+
+        self.dataset.reset_index(drop=True, inplace=True)
+
+        # ToDo make mapping dictionary an attribute of the WrdsConnection object. Then, use self.attribute_name below.
+        self.dataset = self.dataset.rename({'revt': 'revenue', 'xdr': 'r_n_d', 'xstfws': 'wages_and_salaries',
+                                            'act': 'total_assets', 'fyrc': 'fiscal_year_end', 'tic': 'ticker'},
+                                           axis='columns')
+
     def add_address(self):
         """
         Add company addresses, where available. The addresses contain four rows, separated by a newline character "\\n".
@@ -346,11 +405,23 @@ class WrdsConnection:
         address_and_gvkey = pd.concat([address, self._company_table['gvkey']], axis=1)
         self.dataset = pd.merge(self.dataset, address_and_gvkey, how='left', on=['gvkey'])
 
+    def load_gvkeys(self, gvkeys: tuple):
+        """
+        Provide a tuple of gvkeys and start building your sample from there.
+        """
+        gvkeys = pd.DataFrame(gvkeys)
+        if self.dataset and 'gvkey' in self.dataset:
+            self.dataset = pd.merge([self.dataset, gvkeys], how='outer')
+        elif hasattr(self, 'dataset'):
+            self.dataset = pd.concat([self.dataset, gvkeys], ignore_index=True)
+        else:
+            self.dataset = gvkeys
+
     def _download_names_table(self):
         """
         Pulls data from the "NAMES" table in compustat's "COMPA" library. The table matches gvkeys, which are used
         internally by compustat, with their respective company names. Other information provided by the names table
-        incluede the ticker (tic), the cusip (Committee on Uniform Security Identification Procedures) code, the cik
+        include the ticker (tic), the cusip (Committee on Uniform Security Identification Procedures) code, the cik
         number (which is also used for identification purposes), and the SIC and NAICS industry identifiers.
         """
         if self._names_table is None:
@@ -373,6 +444,26 @@ class WrdsConnection:
         if self._executive_table is None:
             self._executive_table = self.db.get_table(library='execcomp', table='anncomp')
             self._executive_table['year'] = self._executive_table['year'].astype('Int64')
+
+    def _download_annuals(self):
+        """
+        Downloads data from the "FUNDA" (fundamentals annual) table in compustat's "COMPA" (company annual) library. The
+        table contains company-year observations on balance sheet items, incomer statement items, and cash flow items,
+        etc.
+        See also: https://wrds-web.wharton.upenn.edu/wrds/ds/comp/funda/index.cfm?navId=80#variablesTab
+        :return: Returns True if data has been made available, and False if not.
+        """
+        if self._annuals_table is None:
+            confirm = input("Warning: the data table you are about to download is very large. RAM and swap "
+                            + "partition usage might increase by 30GB or more. Press y to confirm.")
+            if confirm == 'y':
+                self._annuals_table = self.db.get_table(library='compa', table='funda')
+                return True
+            else:
+                print('Process aborted. The table has not been downloaded.')
+                return False
+        else:
+            return True
 
     def return_dataframe(self):
         """

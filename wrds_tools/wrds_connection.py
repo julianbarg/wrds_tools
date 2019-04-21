@@ -390,7 +390,7 @@ class WrdsConnection:
         self.dataset.reset_index(drop=True, inplace=True)
 
         # ToDo make mapping dictionary an attribute of the WrdsConnection object. Then, use self.attribute_name below.
-        self.dataset = self.dataset.rename({'revt': 'revenue', 'xdr': 'r_n_d', 'xstfws': 'wages_and_salaries',
+        self.dataset = self.dataset.rename({'revt': 'revenue', 'xrd': 'r_n_d', 'xstfws': 'wages_and_salaries',
                                             'act': 'total_assets', 'fyrc': 'fiscal_year_end', 'tic': 'ticker'},
                                            axis='columns')
 
